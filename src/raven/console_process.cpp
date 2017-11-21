@@ -18,12 +18,22 @@
  */
 
 /**
-*  \file: console_process.cpp
-*  \author Hawkeye
-*  \version 
-*  \brief Lets the user to set different control modes and outputs data to the console periodically.
-*   User can toggle to either specify joint torque, set control mode, or toggle console messages.
-*  
+*  	\file console_process.cpp
+*
+*	\brief Lets the user set different control modes and outputs data to the console periodically.
+*   	User can toggle to either specify joint torque, set control mode, or toggle console messages.
+*
+*  	\author Hawkeye King
+*
+* 	\fn These are the 3 functions in console_process.cpp file. 
+*           Functions marked with "*" are called explicitly from other files.
+* 	       *(1) console_process	 	:uses (2)(3)
+*       	(2) getkey	 
+* 		(3) outputRobotState	
+*
+*  	\date ??
+*
+*  	\ingroup IO
 */
 
 #include <stdio.h>
@@ -47,9 +57,18 @@ extern std::queue<char*> msgqueue;
 void outputRobotState();
 int getkey();
 
-/**\fn void *console_process(void *)
- * \brief this thread dedicated to console io
- * \param a pointer to void
+/**
+*	\fn void *console_process(void *)
+*
+* 	\brief this thread is dedicated to console io
+*
+* 	\desc user sends commands via console where output messages are also displayed
+*
+* 	\param a pointer to void
+*
+*	\ingroup IO
+*
+*	\return void
 */
 void *console_process(void *)
 {
@@ -88,12 +107,27 @@ void *console_process(void *)
             case 'z':
             {
                 output_robot = 0;
-                setDofTorque(0,0,0);
+                setDofTorque(0,0,0);  /// only mech 0 dof 0 -> 0 torque??
                 log_msg("Torque zero'd");
                 print_msg=1;
                 break;
             }
-
+            case 'd':
+	    case 'D':
+            {
+              log_msg("pedal down");
+              setSurgeonMode(1);
+              updateMasterRelativeOrigin(&device0);  
+              break;
+            }
+            case 'u':
+	    case 'U':
+            {
+              log_msg("pedal up");  
+              setSurgeonMode(0);
+              updateMasterRelativeOrigin(&device0);  
+              break;
+            }
             case 'e':
             case 'E':
             case '0':
@@ -169,24 +203,31 @@ void *console_process(void *)
 
         usleep(33*1e3); //Sleep for 1/30 seconds
 
-	// Output log messages
-	while (msgqueue.size() > 0){
-	  char* buf = msgqueue.front();
-	  //std::cout << "buf\n" << buf << std::endl;
-	  ROS_INFO("%s", buf);
-	  msgqueue.pop();
-	  free(buf);
-	}
+		// Output log messages
+		while (msgqueue.size() > 0){
+		  char* buf = msgqueue.front();
+		  //std::cout << "buf\n" << buf << std::endl;
+		  ROS_INFO("%s", buf);
+		  msgqueue.pop();
+		  free(buf);
+		}
 
     }
 
     return(NULL);
 }
 
-/**\fn int getkey()
- * \brief gets keyboard character for switch case's of console_process()
- * \return return keyboard character
- */
+/**
+*	\fn int getkey()
+*
+*	\brief gets keyboard character for switch case's of console_process()
+*
+* 	\return returns keyboard character
+*
+*	\ingroup IO
+*
+*	\return character int
+*/
 int getkey() {
     int character;
     struct termios orig_term_attr;
@@ -210,12 +251,17 @@ int getkey() {
     return character;
 }
 
-/**\fn void outputRobotState()
- * \brief prints out all the robots states on the console window
- * \return void
- */
+/**
+*	\fn void outputRobotState()
+*
+*	\brief prints out all the robot's states on the console window
+*
+*	\ingroup IO
+*
+*	\return void
+*/
 void outputRobotState(){
-    cout<<"Runevel: "<< static_cast<unsigned short int>(device0.runlevel)<<"\n";
+    cout<<"Runlevel: "<< static_cast<unsigned short int>(device0.runlevel)<<"\n";
     for (int j = 0; j < 2; j++)
     {
         if (device0.mech[j].type == GOLD_ARM)
@@ -316,6 +362,11 @@ void outputRobotState(){
             cout<<fixed<<setprecision(3)<<device0.mech[j].joint[i].tau_d<<"\t";
         cout<<"\n";
 
+        cout<<"tau:\t\t";
+        for (int i=0;i<MAX_DOF_PER_MECH;i++)
+            cout<<fixed<<setprecision(3)<<device0.mech[j].joint[i].tau<<"\t";
+        cout<<"\n";
+
         cout<<"tau_g:\t\t";
         for (int i=0;i<MAX_DOF_PER_MECH;i++)
             cout<<fixed<<setprecision(3)<<device0.mech[j].joint[i].tau_g<<"\t";
@@ -334,6 +385,20 @@ void outputRobotState(){
         cout<<"KD gains:\t";
         for (int i=0;i<MAX_DOF_PER_MECH;i++)
             cout<<fixed<<setprecision(3)<<DOF_types[j*MAX_DOF_PER_MECH+i].KD<<"\t";
+        cout<<"\n";
+
+        cout<<"jac force:\t";
+        float forces[6];
+        device0.mech[j].r2_jac.get_force(forces);
+        for (int i=0; i < 6;i++)
+            cout<<fixed<<"\t"<<setprecision(3)<<forces[i];
+        cout<<"\n";
+
+        cout<<"velocity:\t";
+        float velocity[6];
+        device0.mech[j].r2_jac.get_vel(velocity);
+        for (int i=0; i < 6;i++)
+            cout<<fixed<<"\t"<<setprecision(3)<<velocity[i];
         cout<<"\n";
 //
 //        cout<<"enc_offset:\t";

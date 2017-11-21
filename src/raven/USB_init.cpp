@@ -17,13 +17,29 @@
  * along with Raven 2 Control.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-/**\file USB_init.cpp
- * \brief USB initialization module
- * \author Ken Fodero
- * \author Hawkeye King
- * \ingroup IO
- */
+ /**
+*   \file USB_init.cpp
+*
+*	\brief USB initialization module
+*
+*	\fn These are the 9 functions in USB_init.cpp file. 
+*           Functions marked with "*" are called explicitly from other files.
+* 		(1) getdir		 
+*       	(2) get_board_id_from_filename	 
+* 		(3) write_zeros to board	:uses (8)
+* 	       *(4) USBInit			:uses (1)(2)(3)
+* 	       *(5) USBShutDown
+* 	       *(6) startUSBRead
+* 	       *(7) usb_read
+* 		(8) usb_write
+* 	       *(9) usb_reset_encoder
+*
+*	\author Hawkeye King
+*
+*       \date 3-Nov-2011
+*
+*	\ingroup IO
+*/
 
 #include <string.h>
 #include <vector>
@@ -139,6 +155,8 @@ int USBInit(struct device *device0)
     // Get list of files in dev dir
     vector<string> files = vector<string>();
     getdir(BRL_USB_DEV_DIR, files);
+	sort(files.begin(), files.end());
+reverse(files.begin(),files.end());
 
     log_msg("  Found board files::");
     for (unsigned int i = 0;i < files.size();i++) {
@@ -148,61 +166,67 @@ int USBInit(struct device *device0)
     //Initialize all active USB Boards
     //Open and reset available boards
     USBBoards.activeAtStart=0;
+	int mechcounter = 0; // HACKHACKHACK
     for (uint i=0;i<files.size();i++)
     {
         boardStr = BRL_USB_DEV_DIR;
         boardStr += files[i];
         boardid = get_board_id_from_filename(files[i]);
-
-        // Open usb dev
-        int tmp_fileHandle = open(boardStr.c_str(), O_RDWR|O_NONBLOCK);    //Is NONBLOCK mode required??// open board chardev
-
-
-        if (tmp_fileHandle <=0 )
-        {
-            perror("ERROR: couldn't open board");
-            errno=0;
-            continue; //Failed to open board, move to next one
-        }
-
-        // Setup usb dev.  ioctl() performs an initialization in driver.
-        if ( ioctl(tmp_fileHandle, BRL_RESET_BOARD) != 0)
-        {
-            ROS_ERROR("ERROR: ioctl error opening board %s", boardStr.c_str());
-            errno = 0;
-        }
-
-        device0->mech[i].type = 0;
-        // Set mechanism type Green or Gold surgical robot
-        if (boardid == GREEN_ARM_SERIAL)
-        {
-            okboards++;
-            log_msg("  Green Arm on board #%d.",boardid);
-            device0->mech[i].type = GREEN_ARM;
-        }
-        else if (boardid == GOLD_ARM_SERIAL)
-        {
-            okboards++;
-            log_msg("  Gold Arm on board #%d.",boardid);
-            device0->mech[i].type = GOLD_ARM;
-        }
-        else
-        {
-            log_msg("*** WARNING: USB BOARD #%d NOT CONNECTED TO MECH (update defines?).",boardid);
-        }
-
-        // Store usb dev parameters
-        boardFile.push_back(tmp_fileHandle);  // Store file handle
-        USBBoards.boards.push_back(boardid);  // Store board array index
-        boardFPs[boardid] = tmp_fileHandle;   // Map serial (i) to fileHandle (tmp_fileHandle)
-        USBBoards.activeAtStart++;            // Increment board count
-
-        log_msg("board FPs ---> %i", boardFPs[boardid]);
-
-
-        if ( write_zeros_to_board(boardid) != 0){
-            ROS_ERROR("Warning: failed initial board reset (set-to-zero)");
-        }
+		if((boardid == GREEN_ARM_SERIAL) || (boardid == GOLD_ARM_SERIAL ))
+		{
+	
+	        // Open usb dev
+	        int tmp_fileHandle = open(boardStr.c_str(), O_RDWR|O_NONBLOCK);    //Is NONBLOCK mode required??// open board chardev
+	
+	
+	        if (tmp_fileHandle <=0 )
+	        {
+	            perror("ERROR: couldn't open board");
+	            errno=0;
+	            continue; //Failed to open board, move to next one
+	        }
+	
+	        // Setup usb dev.  ioctl() performs an initialization in driver.
+	        if ( ioctl(tmp_fileHandle, BRL_RESET_BOARD) != 0)
+	        {
+	            ROS_ERROR("ERROR: ioctl error opening board %s", boardStr.c_str());
+	            errno = 0;
+	        }
+	
+	        device0->mech[i].type = 0;
+	        // Set mechanism type Green or Gold surgical robot
+	        if (boardid == GREEN_ARM_SERIAL)
+	        {
+	            okboards++;
+	            log_msg("  Green Arm on board #%d.",boardid);
+	            device0->mech[mechcounter].type = GREEN_ARM;
+				mechcounter++;
+	        }
+	        else if (boardid == GOLD_ARM_SERIAL)
+	        {
+	            okboards++;
+	            log_msg("  Gold Arm on board #%d.",boardid);
+	            device0->mech[mechcounter].type = GOLD_ARM;
+				mechcounter++;
+	        }
+	        else
+	        {
+	            log_msg("*** WARNING: USB BOARD #%d NOT CONNECTED TO MECH (update defines?).",boardid);
+	        }
+	
+	        // Store usb dev parameters
+	        boardFile.push_back(tmp_fileHandle);  // Store file handle
+	        USBBoards.boards.push_back(boardid);  // Store board array index
+	        boardFPs[boardid] = tmp_fileHandle;   // Map serial (i) to fileHandle (tmp_fileHandle)
+	        USBBoards.activeAtStart++;            // Increment board count
+	
+	        log_msg("board FPs ---> %i", boardFPs[boardid]);
+	
+	
+	        if ( write_zeros_to_board(boardid) != 0){
+	            ROS_ERROR("Warning: failed initial board reset (set-to-zero)");
+       		 }
+		}
     }
 
     if (okboards < 2){

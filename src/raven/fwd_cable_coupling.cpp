@@ -19,14 +19,25 @@
 
 /**
 *  \file fwd_cable_coupling.cpp
-*  \brief Calculate the forward cable coupling from a motor space Pose,
-*         (m1, m2,m3) express the desired joint pose (th1, th2, d3)
-*  \author Hawkeye
+*
+*  	\brief  Calculate the forward cable coupling from a motor space Pose,
+*         	(m1, m2,m3) express the desired joint pose (th1, th2, d3)
+*
+* 	\desc	The fwdCableCoupling is called by function controlRaven in rt_raven.cpp file.
+*		To translate from motor position/velocity to joint position/velocity.
+*
+* 	\fn These are the 4 functions in fwd_cable_coupling.cpp file.
+*           Functions marked with "*" are called explicitly from other files.
+* 	       *(1) fwdCableCoupling		:uses (2)
+* 		(2) fwdMechCableCoupling
+* 	       *(3) fwdTorqueCoupling		:uses (4)
+* 		(4) fwdMechTorqueCoupling
+*
+*  	\author Hawkeye
 */
 
 #include "fwd_cable_coupling.h"
 #include "log.h"
-#include "tool.h"
 
 extern struct DOF_type DOF_types[];
 extern int NUM_MECH;
@@ -119,64 +130,34 @@ void fwdMechCableCoupling(struct mechanism *mech)
 
 
 	// Tool degrees of freedom ===========================================
-	if (mech->tool_type == TOOL_GRASPER_10MM)
-	{
+    int sgn = 0;
+    switch(mech->mech_tool.t_style){
+	  case raven:
+		sgn = (mech->type == GOLD_ARM) ? 1 : -1;
+		break;
+	  case dv:
+		sgn = (mech->type != GOLD_ARM) ? 1 : -1;
+		break;
+	  case square_raven:
+		sgn = -1;
+		break;
+	  default:
+		log_msg("undefined tool style!!! inv_cable_coupling.cpp");
+		break;
+    }
 
-		int sgn = (mech->type == GOLD_ARM) ? 1 : -1;
-		th3 = (1.0/tr3) * (m3 - sgn*m4/GB_RATIO);
-		th5 = (1.0/tr5) * (m5 - sgn*m4/GB_RATIO);
-		th6 = (1.0/tr6) * (m6 - sgn*m4/GB_RATIO);
-		th7 = (1.0/tr7) * (m7 - sgn*m4/GB_RATIO);
-	}
+	int sgn_6 = sgn;
+#ifdef OPPOSE_GRIP
+	sgn_6 *= -1;
+#endif
 
-	else if (mech->tool_type == dv_adapter)
-	{
-		int sgn = (mech->type != GOLD_ARM) ? 1 : -1; //original
-//		int sgn = (mech->type == GOLD_ARM) ? 1 : -1;
-		th3 = (1.0/tr3) * (m3 - sgn*m4/GB_RATIO);
-		th5 = (1.0/tr5) * (m5 - sgn*m4/GB_RATIO);
-		th6 = (1.0/tr6) * (m6 - sgn*m4/GB_RATIO) - th5/2;
-		th7 = (1.0/tr7) * (m7 - sgn*m4/GB_RATIO) + th5/2;
-	}
-
-	else if (mech->tool_type == RII_square_type)
-	{
-		int sgn = -1;
-		th3 = (1.0/tr3) * (m3 - sgn*m4/GB_RATIO);
-		th5 = (1.0/tr5) * (m5 - sgn*m4/GB_RATIO);
-		th6 = (1.0/tr6) * (m6 - sgn*m4/GB_RATIO);
-		th7 = (1.0/tr7) * (m7 - sgn*m4/GB_RATIO);
-	}
+    float tool_coupling = mech->mech_tool.wrist_coupling;
+    th3 = (1.0/tr3) * (m3 - sgn*m4/GB_RATIO);
+    th5 = (1.0/tr5) * (m5 - sgn*m4/GB_RATIO);
+    th6 = (1.0/tr6) * (m6 - sgn_6*m4/GB_RATIO) - th5*tool_coupling;
+    th7 = (1.0/tr7) * (m7 - sgn*m4/GB_RATIO) + th5*tool_coupling;
 
 
-	else if (mech->tool_type == davinci_square_type)
-	{
-		int sgn = -1;
-		th3 = (1.0/tr3) * (m3 - sgn*m4/GB_RATIO);
-		th5 = (1.0/tr5) * (m5 - sgn*m4/GB_RATIO);
-		th6 = (1.0/tr6) * (m6 - sgn*m4/GB_RATIO) - th5/2;
-		th7 = (1.0/tr7) * (m7 - sgn*m4/GB_RATIO) + th5/2;
-	}
-
-
-	else if (mech->tool_type == TOOL_GRASPER_8MM)
-	{
-		log_msg("8mm");
-		// Note: sign of the last term changes for GOLD vs GREEN arm
-		int sgn = (mech->type == GOLD_ARM) ? 1 : -1;
-		th3 = (1.0/tr3) * (m3 - m4/GB_RATIO);
-		th5 = (1.0/tr5) * (m5 - m4/GB_RATIO);
-		th6 = (1.0/tr6) * (m6 - m4/GB_RATIO - sgn * (tr5*th5) * (tr5/tr6));
-		th7 = (1.0/tr7) * (m7 - m4/GB_RATIO + sgn *(tr5*th5) * (tr5/tr6));
-	}
-	else // (mech->tool_type == TOOL_NONE) // there's tool in the robot
-	{
-		// coupling goes until the tool adapter pulleys
-		th3 = (1.0/tr3) * (m3 - m4/GB_RATIO);
-		th5 = (1.0/tr5) * (m5 - m4/GB_RATIO);
-		th6 = (1.0/tr6) * (m6 - m4/GB_RATIO);
-		th7 = (1.0/tr7) * (m7 - m4/GB_RATIO);
-	}
 	// Now have solved for th1, th2, d3, th4, th5, th6
 	mech->joint[SHOULDER].jpos 		= th1;// - mech->joint[SHOULDER].jpos_off;
 	mech->joint[ELBOW].jpos 		= th2;// - mech->joint[ELBOW].jpos_off;
@@ -215,6 +196,8 @@ void fwdTorqueCoupling(struct device *device0, int runlevel)
 
 /**
 * \fn void fwdMechTorqueCoupling(struct mechanism *mech)
+* \brief calculates joint position and velocity based on motor position and velocity
+*
 * \param mech
 * \return void
 */
@@ -283,28 +266,34 @@ void fwdMechTorqueCoupling(struct mechanism *mech)
 	d4_dot  = (1.0/tr4) * m4_dot;
 
 
+
+// TODO:: why is only the RAVEN tool referenced in this?
 	// Tool degrees of freedom ===========================================
-	if (mech->tool_type == TOOL_GRASPER_10MM)
-	{
+//	if (mech->tool_type == TOOL_GRASPER_10MM)
+//	{
 		int sgn = (mech->type == GOLD_ARM) ? 1 : -1;
+		int sgn_6 = sgn;
+#ifdef OPPOSE_GRIP
+		sgn_6 = -1 * sgn;
+#endif
 		th3 = (1.0/tr3) * (m3 - sgn*m4/GB_RATIO);
 		th5 = (1.0/tr5) * (m5 - sgn*m4/GB_RATIO);
-		th6 = (1.0/tr6) * (m6 - sgn*m4/GB_RATIO);
+		th6 = (1.0/tr6) * (m6 - sgn_6*m4/GB_RATIO);
 		th7 = (1.0/tr7) * (m7 - sgn*m4/GB_RATIO);
-	}
+//	}
 
 	// Now have solved for th1, th2, d3, th4, th5, th6
 	mech->joint[SHOULDER].jpos 	= th1;// - mech->joint[SHOULDER].jpos_off;
-	mech->joint[ELBOW].jpos 		= th2;// - mech->joint[ELBOW].jpos_off;
+	mech->joint[ELBOW].jpos 	= th2;// - mech->joint[ELBOW].jpos_off;
 	mech->joint[TOOL_ROT].jpos 	= th3;// - mech->joint[TOOL_ROT].jpos_off;
-	mech->joint[Z_INS].jpos 		= d4;//  - mech->joint[Z_INS].jpos_off;
-	mech->joint[WRIST].jpos 		= th5;// - mech->joint[WRIST].jpos_off;
-	mech->joint[GRASP1].jpos 		= th6;// - mech->joint[GRASP1].jpos_off;
-	mech->joint[GRASP2].jpos 		= th7;// - mech->joint[GRASP2].jpos_off;
+	mech->joint[Z_INS].jpos 	= d4;//  - mech->joint[Z_INS].jpos_off;
+	mech->joint[WRIST].jpos 	= th5;// - mech->joint[WRIST].jpos_off;
+	mech->joint[GRASP1].jpos 	= th6;// - mech->joint[GRASP1].jpos_off;
+	mech->joint[GRASP2].jpos 	= th7;// - mech->joint[GRASP2].jpos_off;
 
 	mech->joint[SHOULDER].jvel 	= th1_dot;// - mech->joint[SHOULDER].jpos_off;
-	mech->joint[ELBOW].jvel 		= th2_dot;// - mech->joint[ELBOW].jpos_off;
-	mech->joint[Z_INS].jvel 		= d4_dot;//  - mech->joint[Z_INS].jpos_off;
+	mech->joint[ELBOW].jvel 	= th2_dot;// - mech->joint[ELBOW].jpos_off;
+	mech->joint[Z_INS].jvel 	= d4_dot;//  - mech->joint[Z_INS].jpos_off;
 
 	return;
 }

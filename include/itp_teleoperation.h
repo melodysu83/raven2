@@ -49,10 +49,9 @@ version      Protocol version number  (***SRI)
 delx[2]	     position increment
 dely[2]
 delz[2]
-double Qx[2]      quaternion increment
-double Qy[2]
-double Qz[2]
-double Qw[2]
+delyaw[2]    Orientation increment
+delpitch[2]
+delroll[2]
 buttonstate[2]
 grasp[2]        +32767 = 100% closing torque, -32768 = 100% opening
 surgeon_mode    SURGEON_ENGAGED or SURGEON_DISENGAGED  (formerly Pedal_Down or Pedal_UP)
@@ -75,7 +74,7 @@ struct u_struct {
 	int grasp[2];
 	int surgeon_mode;
 	int checksum;
-};//__attribute__((__packed__));
+}__attribute__((__packed__));
 
 /*
 v_struct: Return DS from slave to master.
@@ -100,7 +99,7 @@ struct v_struct {
 	int runlevel;
 	unsigned int  jointflags;
 	int checksum;
-};
+}__attribute__((__packed__));
 
 #endif //teleoperation_h
 
